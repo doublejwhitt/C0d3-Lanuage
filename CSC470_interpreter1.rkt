@@ -1,7 +1,9 @@
 ;; The first three lines of this file were inserted by DrRacket. They record metadata
 ;; about the language level of this file in a form that our tools can easily process.
-#reader(lib "htdp-advanced-reader.ss" "lang")((modname CSC470_interpreter1) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none #f () #f)))
+#reader(lib "htdp-advanced-reader.ss" "lang")((modname CSC470_interpreter1) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none#f () #f)))
+
 ; Enviroment Initializers
+
 (define empty-env
   (lambda () (list 'empty-env)))
 
@@ -41,6 +43,7 @@
     (not (eq? (apply-env var-name env) #f))))
 
 ; Grammar Constructors
+
 (define lit-exp
   (lambda (n)
     (list 'lit-exp n)))
@@ -62,6 +65,7 @@
     (list 'math-exp lc-exp1 op lc-exp2)))
 
 ; Grammar Extractors
+
 (define lc-exp->type
   (lambda (lc-exp)
     (car lc-exp)))
@@ -91,6 +95,7 @@
     (caddr app-exp)))
 
 ; Grammar Predicates
+
 (define lit-exp?
   (lambda (lc-exp)
     (eq? (lc-exp->type lc-exp) 'lit-exp)))
@@ -112,6 +117,7 @@
     (eq? (lc-exp->type lc-exp) 'math-exp)))
 
 ;C0d3 Extractors
+
 (define literal-exp->value
   (lambda (literal-exp)
     (cadr literal-exp)))
