@@ -56,6 +56,10 @@
 (define app-exp
   (lambda (lambda-exp param-value)
     (list 'app-exp lambda-exp param-value)))
+    
+(define math-exp
+  (lambda (lc-exp1 op lc-exp2)
+    (list 'math-exp lc-exp1 op lc-exp2)))
 
 ; Grammar Extractors
 (define lc-exp->type
@@ -102,6 +106,10 @@
 (define lambda-exp?
   (lambda (lc-exp)
     (eq? (lc-exp->type lc-exp) 'lambda-exp)))
+  
+(define math-exp?
+  (lambda (lc-exp)
+    (eq? (lc-exp->type lc-exp) 'math-exp)))
 
 ;C0d3 Extractors
 (define literal-exp->value
@@ -127,6 +135,14 @@
 (define run-exp->parameter
   (lambda (run-exp)
     (cadddr run-exp)))
+    
+(define math-exp->operator
+  (lambda(math-exp)
+    (cond
+      ((eq? (cadr math-exp) '-) -)
+      ((eq? (cadr math-exp) '+) +)
+      ((eq? (cadr math-exp) '/) /)
+      ((eq? (cadr math-exp) '*) *))))
 
 ; Parse/Unparse
 ; (func gets (x) does x)
@@ -134,9 +150,15 @@
 ; (Get-Value ‘A)
 ; (literal 5)
 
+; do-bmath helper
+(define do-bmath 
+  (lambda(math-exp)    
+    (car (car (cdr (cdr math-exp))))))
+
 (define parse-expression
   (lambda (c0d3)
     (cond
+      ((eq? (car c0d3) 'math) (math-exp (math-exp->op c0d3))) (parse-expression (cadddr c0d3))))
       ((eq? (car c0d3) 'literal) (lit-exp (literal-exp->value c0d3)))
       ((eq? (car c0d3) 'get-value) (var-exp (get-value-exp->value c0d3)))
       ((eq? (car c0d3) 'func) (lambda-exp (func-exp->parameter c0d3) (parse-expression (func-exp->body c0d3))))
@@ -147,6 +169,7 @@
 (define apply-expression
   (lambda (lcexp env)
     (cond
+      ((math-exp? lcexp)(do-bmath lcexp))
       ((lit-exp? lcexp) (lit-exp->value lcexp))
       ((var-exp? lcexp) (apply-env (var-exp->var-name lcexp) env))
       ((lambda-exp? lcexp) (apply-expression (lambda-exp->body lcexp) env))
@@ -161,7 +184,7 @@
   (lambda (c0d3-src env)
     (apply-expression (parse-expression c0d3-src) env)))
 
-(define myC0d3 '(run (func gets (a) does (get-value a)) with (literal 5)))
+(define myC0d3 '(run (func gets (a) does (get-value a))+(literal 7)))
 (define env (extend-env* '(c d e) '(1 2 3) (empty-env)))
 (parse-expression myC0d3)
 (run-program myC0d3 env)
