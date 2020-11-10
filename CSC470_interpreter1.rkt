@@ -2,43 +2,78 @@
 ;; about the language level of this file in a form that our tools can easily process.
 #reader(lib "htdp-advanced-reader.ss" "lang")((modname CSC470_interpreter1) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #t #t none #f () #f)))
 ; Enviroment Initializers
-(define empty-env
-  (lambda () (list 'empty-env)))
+(define empty-scope
+  (lambda () (list 'empty-scope)))
 
-(define extend-env
-  (lambda (name value env)
-    (list 'extend-env name value env)))
+(define extend-scope
+  (lambda (name value scope)
+    (list 'extend-scope name value scope)))
 
-(define extend-env*
-  (lambda (lon lov env)
+(define extend-scope*
+  (lambda (lon lov scope)
     (cond
-      ((null? lon) env)
-      (else (extend-env* (cdr lon) (cdr lov) (extend-env (car lon) (car lov) env))))))
+      ((null? lon) scope)
+      (else (extend-scope* (cdr lon) (cdr lov) (extend-scope (car lon) (car lov) scope))))))
 
 (define get-name
-  (lambda (env) (cadr env)))
+  (lambda (scope) (cadr scope)))
 
 (define get-value
-  (lambda (env) (caddr env)))
+  (lambda (scope) (caddr scope)))
 
-(define get-env
-  (lambda (env) (cadddr env)))
+(define get-scope
+  (lambda (scope) (cadddr scope)))
 
-(define empty-env?
-  (lambda (env) (eq? 'empty-env (car env))))
+(define empty-scope?
+  (lambda (env) (eq? 'empty-scope (car env))))
+
+(define apply-scope
+  (lambda (var-name scope)
+    (cond
+      ((empty-scope? env) #f)
+      (else
+       (if (eq? var-name (get-name scope))
+           (get-value scope)
+           (apply-scope var-name (get-scope scope)))))))
+
+(define has-binding?
+  (lambda (var-name scope)
+    (not (eq? (apply-scope var-name scope) #f))))
+
+(define push-scope
+  (lambda (scope env)
+    (cons scope env)))
+
+(define peek-scope
+  (lambda (env)
+    (if (null? env)
+        #f
+        (car env))))
+
+(define remove-scope
+  (lambda (env)
+    (cdr env)))
+
+
+(define empty-env
+  (lambda () '((empty-scope))))
+
+(define extend-env
+  (lambda (var-name var-value env)
+    (let* ((top-scope (peek-scope env))
+           (extended-scope (extend-scope var-name var-value top-scope))
+           (temp-env (remove-scope env)))
+      (push-scope extended-scope temp-env))))
+
 
 (define apply-env
   (lambda (var-name env)
     (cond
-      ((empty-env? env) #f)
-      (else
-       (if (eq? var-name (get-name env))
-           (get-value env)
-           (apply-env var-name (get-env env)))))))
-
-(define has-binding?
-  (lambda (var-name env)
-    (not (eq? (apply-env var-name env) #f))))
+      ((null? env) #f)
+      ((has-binding? var-name (peek-scope env))
+       (apply-scope var-name (peek-scope env)))
+      (else (apply-env var-name (remove-scope env))))))     
+    
 
 ; Grammar Constructors
 (define lit-exp
@@ -52,6 +87,10 @@
 (define bool-exp
   (lambda (op left right)
     (list 'bool-exp op left right)))
+
+(define repeat-exp
+  (lambda (count exp)
+    (list 'repeat-exp count exp)))
 
 (define create-var-exp
   (lambda (var-name var-val)
@@ -93,6 +132,14 @@
 (define var-exp->var-name
   (lambda (var-exp)
     (cadr var-exp)))
+
+(define repeat-exp->count
+  (lambda (repeat-exp)
+    (cadr repeat-exp)))
+
+(define repeat-exp->exp
+  (lambda (repeat-exp)
+    (caddr repeat-exp)))
 
 (define create-var-exp->var-name
   (lambda (create-var-exp)
@@ -175,6 +222,10 @@
   (lambda (lc-exp)
     (eq? (lc-exp->type lc-exp) 'print-exp)))
 
+(define repeat-exp?
+  (lambda (lc-exp)
+    (eq? (lc-exp->type lc-exp) 'repeat-exp)))
+
 (define create-var-exp?
   (lambda (lc-exp)
      (eq? (lc-exp->type lc-exp) 'create-var-exp)))
@@ -211,6 +262,14 @@
 (define display-exp->exp
   (lambda (display-exp)
     (cadr display-exp)))
+
+(define repeat-exp->times
+  (lambda (repeat-exp)
+    (cadr repeat-exp)))
+
+(define repeat-exp->what
+  (lambda (repeat-exp)
+    (cadddr repeat-exp)))
 
 (define remember-exp->var-name
   (lambda (remember-exp)
@@ -291,6 +350,9 @@
 ; (display (literal 7)) NOTE: displayed values are in purple (resolved are in blue)
 ; (do-in-order c0d3*)
 ; (remember a 13)
+; (repeat 10 times (display (literal 5))
+; (update a (literal 15))
+; (while bool-expression body) 
         
 (define parse-expression
   (lambda (c0d3)
@@ -300,6 +362,8 @@
       ((eq? (car c0d3) 'test) (bool-exp (test-exp->op c0d3)
                                         (parse-expression (test-exp->left c0d3))
                                         (parse-expression (test-exp->right c0d3))))
+      ((eq? (car c0d3) 'repeat) (repeat-exp (parse-expression (repeat-exp->times c0d3))
+                                            (parse-expression (repeat-exp->what c0d3))))
       ((eq? (car c0d3) 'remember) (create-var-exp
                                        (remember-exp->var-name c0d3)
                                        (parse-expression (remember-exp->var-val c0d3))))
@@ -341,34 +405,51 @@
   (lambda (lcexp env)
     (cond
       ((lit-exp? lcexp) (lit-exp->value lcexp))
-      ((var-exp? lcexp) (apply-env (var-exp->var-name lcexp) env))
-      ((print-exp? lcexp) (write (apply-expression (print-exp->exp lcexp) env)))
-      ((create-var-exp? lcexp) (let* ((the-create-var (create-var-exp->var-name lcexp))
-                          (the-create-var-name (create-var-exp->var-name the-create-var))
-                          (the-create-var-val (apply-expression (create-var-exp->var-val lcexp) entend-curr-env))
-                          (the-new-env (entend-curr-env the-create-var-name the-create-var-val)))
-                          (apply-expression the-create-var the-new-env))))))
+      ((var-exp? lcexp) (apply-env (var-exp->var-name lcexp) env) scope)
+      ((print-exp? lcexp) (write (apply-expression (print-exp->exp lcexp) env) scope)) 
+      ((repeat-exp? lcexp) (letrec ((theExpression (repeat-exp->exp lcexp))
+                                 (theNumberOfTimesExpression (repeat-exp->count lcexp))
+                                 (theEvaluatedExpression (apply-expression theExpression env) scope)
+                                 (theEvaluatedNumberOfTimesExpression (apply-expression theNumberOfTimesExpression env) scope)
+                                 (repeatFunc (lambda (count)
+                                               (if (= 0 count)
+                                                   '()
+                                                   (cons theEvaluatedExpression (repeatFunc (- count 1)))))))
+                             (repeatFunc theEvaluatedNumberOfTimesExpression))) ;(repeatFunc theEvaluatedNumberOfTimesExpression)))))
+      ((create-var-exp? lcexp) (let ((name (create-var-exp->var-name lcexp))
+                                     (val (apply-expression (create-var-exp->var-val lcexp) env) scope))
+                                 (extend-env name val env) scope))
       ((bool-exp? lcexp) (let ((op (bool-exp->op lcexp))
-                               (left (apply-expression (bool-exp->left lcexp) env))
-                               (right (apply-expression (bool-exp->right lcexp) env)))
+                               (left (apply-expression (bool-exp->left lcexp) env) scope)
+                               (right (apply-expression (bool-exp->right lcexp) env) scope))
                            (resolve-boolean op left right)))
-      ((print-exp? lcexp) (apply-expression (print-exp->exp lcexp) env))
-      ((do-in-order-exp? lcexp) (apply-expression (do-in-order-exp->list-of-expressions) entend-curr-env))
-      ((if-exp? lcexp) (let* ((bool-result (apply-expression (if-exp->bool-exp lcexp) env))
+      ((print-exp? lcexp) (apply-expression (print-exp->exp lcexp) env) scope)
+      ((do-in-order-exp? lcexp) (letrec ((loe (do-in-order-exp->list-of-expressions lcexp))
+                                         (processList (lambda (loe currEnv)
+                                           (cond
+                                             ((empty-scope? env) #f)
+                                             ((null? loe) '())
+                                             ((create-var-exp? (car loe)) (processList
+                                                                           (cdr loe)
+                                                                           (apply-expression (car loe) currEnv)))
+                                             (else (cons (apply-expression (car loe) currEnv)
+                                                         (processList (cdr loe) currEnv)))))))
+                                  (processList loe env) scope))
+      ((if-exp? lcexp) (let* ((bool-result (apply-expression (if-exp->bool-exp lcexp) env) scope))))
                              (true-exp (if-exp->true-exp lcexp))
                              (false-exp (if-exp->false-exp lcexp)))
                          (if bool-result
                              (apply-expression true-exp env)
-                             (apply-expression false-exp env))))
+                             (apply-expression false-exp env) scope)))
       ((math-exp? lcexp) (let ((op (math-exp->op lcexp))
-                               (left (apply-expression (math-exp->left lcexp) env))
-                               (right (apply-expression (math-exp->right lcexp) env)))
+                               (left (apply-expression (math-exp->left lcexp) env) scope)
+                               (right (apply-expression (math-exp->right lcexp) env) scope))
                            (do-math op left right)))
-      ((lambda-exp? lcexp) (apply-expression (lambda-exp->body lcexp) env))
+      ((lambda-exp? lcexp) (apply-expression (lambda-exp->body lcexp) env) scope)
       ((app-exp? lcexp) (let* ((the-lambda (app-exp->lambda-exp lcexp))
                               (the-lambda-param-name (lambda-exp->parameter-name the-lambda))
-                              (the-parameter-value (apply-expression (app-exp->parameter-input lcexp) env))
-                              (the-new-env (extend-env the-lambda-param-name the-parameter-value env)))
+                              (the-parameter-value (apply-expression (app-exp->parameter-input lcexp) env) scope)
+                              (the-new-env (extend-env the-lambda-param-name the-parameter-value env) scope))
                           (apply-expression the-lambda the-new-env))))))
 
 
@@ -383,6 +464,14 @@
                   (test < (get-value a) (literal 7))
                   if-true-do-> (ask-question (test > (get-value a) (literal 5)) if-true-do-> (literal 8) if-false-do-> (literal 9))
                   if-false-do-> (literal 0)))
-(define env (extend-env* '(a c d e) '(6 1 2 3) (empty-env)))
-(parse-expression '(do-in-order (literal 7) (remember a (literal 13)) (literal 8) (display (get-value a))))
-;(run-program '(do-in-order (literal 7) (literal 8) (display (get-value a))) env)
+(define env (extend-env 'a 6 (extend-env 'b 7 (empty-env))))
+;'(do-in-order (literal 7) (remember a (literal 13)) (literal 8) (display (get-value a))
+;(repeat-exp->exp (parse-expression '(repeat (literal 10) times (literal 13))))
+;(run-program '(repeat (literal 10) times (literal 13)) env)
+;(parse-expression '(do-in-order (remember a (literal 1)) while (test < (get-value a) (literal 7))
+;(run-program '(repeat (literal 10) times (do-in-order (remember t (literal 3))
+;                          (remember z (literal 21))
+;                          (do-math + (get-value t) (get-value z))
+;                          (remember r (literal 14))
+;                          (get-value r))) env)
+env
