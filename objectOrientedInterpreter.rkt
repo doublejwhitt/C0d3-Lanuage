@@ -19,7 +19,9 @@
 
 (define empty-object
   (lambda ()
-    (class '(no-parent) '() '() '(getValue) (list (lambda (var-name) '(eq cdr lov))))))
+    (class '(no-parent) '() '() '(getValue) (list (lambda (var-name)
+    (list 'class base-class)))))
+    
 
 (define sendMessage
   (lambda (list-of-field-names list-of-values)
