@@ -19,9 +19,11 @@
 
 (define empty-object
   (lambda ()
-    (class '(no-parent) '() '() '(getValue) (list (lambda (var-name) 'need-logic-here-PARTOFHW)))))
+    (class '(no-parent) '() '() '(getValue) (list (lambda (var-name) '(eq cdr lov))))))
 
-(define sendMessage ;HW HERE TOO
+(define sendMessage
+  (lambda (list-of-field-names list-of-values)
+    (class (empty-object) list-of-field-names list-of-method-values '() '())))
 
 (define Person
   (lambda (list-of-field-names list-of-values)
@@ -29,8 +31,8 @@
 
 (define p1 (Person '(fname lname age) '(Mike Litman 21)))
 (define p2 (Person '(fname lname age) '(Dave Smith 18)))
-(send-message p1 getValue '(fname))
-p2
+(define p1 (send-message getValue '(fname) '(Mike 21)))
+(define p2 (send-message getValue '(fname) '(Dave 18)))
 
 
   
